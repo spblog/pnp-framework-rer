@@ -21,36 +21,15 @@ namespace PnP.Framework.RER.Common.Tokens
         private bool _validated = false;
         private JwtSecurityToken _parsedToken;
         private readonly HttpClient _httpClient;
+        private readonly string _contextToken;
+        private readonly string _host;
 
-        public TokenManager(SharePointAppCreds sharePointAppCreds, HttpClient httpClient)
+        public TokenManager(SharePointAppCreds sharePointAppCreds, HttpClient httpClient, string contextToken, string host)
         {
             _sharePointAppCreds = sharePointAppCreds;
             _httpClient = httpClient;
-        }
-
-        public void ValidateToken(string contextToken, string host)
-        {
-            var key = new SymmetricSecurityKey(Convert.FromBase64String(_sharePointAppCreds.ClientSecret));
-            var handler = new JwtSecurityTokenHandler();
-            SecurityToken validatedToken;
-            var token = handler.ReadJwtToken(contextToken);
-
-            var audienceValue = token.Claims.Single(c => c.Type == "aud").Value;
-            var tenantId = audienceValue.Substring(audienceValue.IndexOf('@') + 1);
-
-            handler.ValidateToken(contextToken, new TokenValidationParameters
-            {
-                IssuerSigningKey = key,
-                ValidateAudience = true,
-                ValidAudience = $"{_sharePointAppCreds.ClientId}/{host}@{tenantId}",
-                ValidateIssuer = true,
-                ValidIssuer = $"{AcsPrincipalName}@{tenantId}",
-                ValidateLifetime = true,
-                ValidateIssuerSigningKey = true
-            }, out validatedToken);
-
-            _validated = true;
-            _parsedToken = validatedToken as JwtSecurityToken;
+            _contextToken = contextToken;
+            _host = host;
         }
 
         public async Task<ClientContext> GetClientContextAsync(string siteUrl)
@@ -67,7 +46,7 @@ namespace PnP.Framework.RER.Common.Tokens
         {
             if (!_validated)
             {
-                throw new Exception("You should validate token first");
+                ValidateToken();
             }
 
             var sharepointHost = new Uri(siteUrl).Authority;
@@ -83,6 +62,31 @@ namespace PnP.Framework.RER.Common.Tokens
             var stsUrl = await GetStsUrlAsync(appCtx.SecurityTokenServiceUri, tenantId);
 
             return await GetAccessTokenAsync(stsUrl, clientId, resource, refreshToken);
+        }
+
+        private void ValidateToken()
+        {
+            var key = new SymmetricSecurityKey(Convert.FromBase64String(_sharePointAppCreds.ClientSecret));
+            var handler = new JwtSecurityTokenHandler();
+            SecurityToken validatedToken;
+            var token = handler.ReadJwtToken(_contextToken);
+
+            var audienceValue = token.Claims.Single(c => c.Type == "aud").Value;
+            var tenantId = audienceValue.Substring(audienceValue.IndexOf('@') + 1);
+
+            handler.ValidateToken(_contextToken, new TokenValidationParameters
+            {
+                IssuerSigningKey = key,
+                ValidateAudience = true,
+                ValidAudience = $"{_sharePointAppCreds.ClientId}/{_host}@{tenantId}",
+                ValidateIssuer = true,
+                ValidIssuer = $"{AcsPrincipalName}@{tenantId}",
+                ValidateLifetime = true,
+                ValidateIssuerSigningKey = true
+            }, out validatedToken);
+
+            _validated = true;
+            _parsedToken = validatedToken as JwtSecurityToken;
         }
 
         private async Task<AccessTokenResponse> GetAccessTokenAsync(string stsUrl, string clientId, string resource, string refreshToken)

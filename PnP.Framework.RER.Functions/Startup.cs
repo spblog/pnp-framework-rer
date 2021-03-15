@@ -14,7 +14,7 @@ namespace PnP.Framework.RER.Functions
             builder.Services.AddHttpClient();
             var sharepointCreds = builder.GetContext().Configuration.GetSection(SharePointAppCreds.SectionName).Get<SharePointAppCreds>();
             builder.Services.AddSingleton(sharepointCreds);
-            builder.Services.AddTransient<TokenManager>();
+            builder.Services.AddSingleton<TokenManagerFactory>();
         }
     }
 }

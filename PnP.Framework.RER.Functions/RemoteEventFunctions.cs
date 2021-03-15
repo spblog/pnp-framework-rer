@@ -19,12 +19,12 @@ namespace PnP.Framework.RER.Functions
 {
     public class RemoteEventFunctions
     {
-        private readonly TokenManager _tokenManager;
+        private readonly TokenManagerFactory _tokenManagerFactory;
         private readonly IHostingEnvironment _hostingEnvironment;
 
-        public RemoteEventFunctions(TokenManager tokenManager, IHostingEnvironment hostingEnvironment)
+        public RemoteEventFunctions(TokenManagerFactory tokenManagerFactory, IHostingEnvironment hostingEnvironment)
         {
-            _tokenManager = tokenManager;
+            _tokenManagerFactory = tokenManagerFactory;
             _hostingEnvironment = hostingEnvironment;
         }
 
@@ -45,12 +45,7 @@ namespace PnP.Framework.RER.Functions
                 }
 
                 var payload = eventRoot.FirstNode.ToString();
-                var eventPropserties = SerializerHelper.Deserialize<SPRemoteEventProperties>(payload);
-
-                if (!string.IsNullOrEmpty(eventPropserties.ErrorMessage))
-                {
-                    throw new Exception($"Event data contains error. Message: {eventPropserties.ErrorMessage}. Code: {eventPropserties.ErrorCode}");
-                }
+                var eventProperties = SerializerHelper.Deserialize<SPRemoteEventProperties>(payload);
 
                 var host = req.Host.Host;
                 if (_hostingEnvironment.IsDevelopment())
@@ -58,19 +53,20 @@ namespace PnP.Framework.RER.Functions
                     host = Environment.GetEnvironmentVariable("ngrokHost");
                 }
 
-                _tokenManager.ValidateToken(eventPropserties.ContextToken, host);
-                var context = await _tokenManager.GetClientContextAsync(eventPropserties.ItemEventProperties.WebUrl);
+                var tokenManager = _tokenManagerFactory.Create(eventProperties, host);
+
+                var context = await tokenManager.GetClientContextAsync(eventProperties.ItemEventProperties.WebUrl);
                 context.Load(context.Web);
                 await context.ExecuteQueryRetryAsync();
 
                 if (eventRoot.Name.LocalName == "ProcessEvent")
                 {
-                    return await ProcessSyncEvent(eventPropserties, context);
+                    return await ProcessSyncEvent(eventProperties, context);
                 }
 
                 if (eventRoot.Name.LocalName == "ProcessOneWayEvent")
                 {
-                    return await ProcessAsyncEvent(eventPropserties, context);
+                    return await ProcessAsyncEvent(eventProperties, context);
                 }
 
                 throw new Exception($"Unable to resolve event type");
@@ -78,7 +74,18 @@ namespace PnP.Framework.RER.Functions
             catch (Exception ex)
             {
                 log.LogError(new EventId(), ex, ex.Message);
-                return new ExceptionResult(ex, true);
+                var result = new SPRemoteEventResult
+                {
+                    Status = SPRemoteEventServiceStatus.CancelWithError,
+                    ErrorMessage = ex.Message
+                };
+
+                return new ContentResult
+                {
+                    Content = CreateEventResponse(result),
+                    ContentType = "text/xml",
+                    StatusCode = 200
+                };
             }
         }
 
