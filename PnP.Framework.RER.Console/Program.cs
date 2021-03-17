@@ -1,12 +1,9 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.SharePoint.Client;
-using PnP.Framework.RER.Common.EventReceivers;
-using PnP.Framework.RER.Common.Helpers;
 using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Xml.Linq;
 
 namespace PnP.Framework.RER.Console
 {

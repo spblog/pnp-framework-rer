@@ -14,6 +14,7 @@ using System.Web.Http;
 using PnP.Framework.RER.Common.Tokens;
 using Microsoft.SharePoint.Client;
 using Microsoft.Extensions.Hosting;
+using System.Net;
 
 namespace PnP.Framework.RER.Functions
 {
@@ -55,7 +56,7 @@ namespace PnP.Framework.RER.Functions
 
                 var tokenManager = _tokenManagerFactory.Create(eventProperties, host);
 
-                var context = await tokenManager.GetClientContextAsync(eventProperties.ItemEventProperties.WebUrl);
+                var context = await tokenManager.GetUserClientContextAsync(eventProperties.ItemEventProperties.WebUrl);
                 context.Load(context.Web);
                 await context.ExecuteQueryRetryAsync();
 
@@ -84,7 +85,7 @@ namespace PnP.Framework.RER.Functions
                 {
                     Content = CreateEventResponse(result),
                     ContentType = "text/xml",
-                    StatusCode = 200
+                    StatusCode = (int?)HttpStatusCode.InternalServerError
                 };
             }
         }
@@ -111,7 +112,7 @@ namespace PnP.Framework.RER.Functions
             {
                 Content = CreateEventResponse(result),
                 ContentType = "text/xml",
-                StatusCode = 200
+                StatusCode = (int?)HttpStatusCode.OK
             };
         }
 

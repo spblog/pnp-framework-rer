@@ -32,11 +32,23 @@ namespace PnP.Framework.RER.Common.Tokens
             _host = host;
         }
 
-        public async Task<ClientContext> GetClientContextAsync(string siteUrl)
+        public ClientContext GetAppClientContextAsync(string siteUrl)
+        {
+            if (!_validated)
+            {
+                ValidateToken();
+            }
+
+            var authManager = new AuthenticationManager();
+            return authManager.GetACSAppOnlyContext(siteUrl, _sharePointAppCreds.ClientId, _sharePointAppCreds.ClientSecret);
+        }
+
+        public async Task<ClientContext> GetUserClientContextAsync(string siteUrl)
         {
             var data = await GetAccessTokenAsync(siteUrl);
             var accessToken = new SecureString();
             Array.ForEach(data.access_token.ToArray(), accessToken.AppendChar);
+
             var authManager = new AuthenticationManager(accessToken);
 
             return await authManager.GetContextAsync(siteUrl);
