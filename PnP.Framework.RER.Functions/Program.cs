@@ -12,6 +12,10 @@ namespace PnP.Framework.RER.Functions
         {
             var host = new HostBuilder()
                 .ConfigureFunctionsWorkerDefaults()
+                .ConfigureAppConfiguration(builder =>
+                {
+                    builder.AddUserSecrets<Program>();
+                })
                 .ConfigureServices((context, services) =>
                 {
                     var sharepointCreds = context.Configuration.GetSection(SharePointAppCreds.SectionName).Get<SharePointAppCreds>();

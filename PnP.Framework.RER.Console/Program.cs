@@ -25,7 +25,7 @@ namespace PnP.Framework.RER.Console
             var list = context.Web.GetListByUrl("Lists/TestList");
             await context.ExecuteQueryRetryAsync();
 
-            await AddEventReceiver(list, "https://0a3a15020784.ngrok.io/api/ProcessItemEvents", EventReceiverType.ItemAdded);
+            await AddEventReceiver(list, "https://f42d049510ca.ngrok.io/api/ProcessItemEvents", EventReceiverType.ItemAdded);
             //await AddEventReceiver(list, "https://0a3a15020784.ngrok.io/api/ProcessItemEvents", EventReceiverType.ItemAdding);
             //await RemoveEventReceiver(list, "azfunc-added");
         }
