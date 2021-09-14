@@ -1,20 +1,17 @@
 using System.IO;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Extensions.Http;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using System.Xml.Linq;
 using System.Linq;
 using PnP.Framework.RER.Common.Helpers;
 using PnP.Framework.RER.Common.EventReceivers;
 using System;
-using System.Web.Http;
 using PnP.Framework.RER.Common.Tokens;
 using Microsoft.SharePoint.Client;
 using Microsoft.Extensions.Hosting;
 using System.Net;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Azure.Functions.Worker.Http;
 
 namespace PnP.Framework.RER.Functions
 {
@@ -29,8 +26,8 @@ namespace PnP.Framework.RER.Functions
             _hostingEnvironment = hostingEnvironment;
         }
 
-        [FunctionName("ProcessItemEvents")]
-        public async Task<IActionResult> ProcessItemEvents([HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = null)] HttpRequest req,
+        [Function("ProcessItemEvents")]
+        public async Task<HttpResponseData> ProcessItemEvents([HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = null)] HttpRequestData req,
             ILogger log)
         {
             try
@@ -48,7 +45,7 @@ namespace PnP.Framework.RER.Functions
                 var payload = eventRoot.FirstNode.ToString();
                 var eventProperties = SerializerHelper.Deserialize<SPRemoteEventProperties>(payload);
 
-                var host = req.Host.Host;
+                var host = req.Url.Host;
                 if (_hostingEnvironment.IsDevelopment())
                 {
                     host = Environment.GetEnvironmentVariable("ngrokHost");
@@ -62,12 +59,12 @@ namespace PnP.Framework.RER.Functions
 
                 if (eventRoot.Name.LocalName == "ProcessEvent")
                 {
-                    return await ProcessSyncEvent(eventProperties, context);
+                    return await ProcessSyncEvent(eventProperties, context, req);
                 }
 
                 if (eventRoot.Name.LocalName == "ProcessOneWayEvent")
                 {
-                    return await ProcessAsyncEvent(eventProperties, context);
+                    return await ProcessAsyncEvent(eventProperties, context, req);
                 }
 
                 throw new Exception($"Unable to resolve event type");
@@ -81,17 +78,16 @@ namespace PnP.Framework.RER.Functions
                     ErrorMessage = ex.Message
                 };
 
-                return new ContentResult
-                {
-                    Content = CreateEventResponse(result),
-                    ContentType = "text/xml",
-                    StatusCode = (int?)HttpStatusCode.InternalServerError
-                };
+                var response = req.CreateResponse(HttpStatusCode.InternalServerError);
+                response.Headers.Add("Content-Type", "text/xml;");
+                response.WriteString(CreateEventResponse(result));
+
+                return response;
             }
         }
 
         // -ing events, i.e ItemAdding
-        private async Task<IActionResult> ProcessSyncEvent(SPRemoteEventProperties properties, ClientContext context)
+        private async Task<HttpResponseData> ProcessSyncEvent(SPRemoteEventProperties properties, ClientContext context, HttpRequestData req)
         {
             switch (properties.EventType)
             {
@@ -108,16 +104,15 @@ namespace PnP.Framework.RER.Functions
                 Status = SPRemoteEventServiceStatus.Continue
             };
 
-            return new ContentResult
-            {
-                Content = CreateEventResponse(result),
-                ContentType = "text/xml",
-                StatusCode = (int?)HttpStatusCode.OK
-            };
+            var response = req.CreateResponse(HttpStatusCode.OK);
+            response.Headers.Add("Content-Type", "text/xml;");
+            response.WriteString(CreateEventResponse(result));
+
+            return response;
         }
 
         // -ed events, i.e. ItemAdded
-        private async Task<IActionResult> ProcessAsyncEvent(SPRemoteEventProperties properties, ClientContext context)
+        private async Task<HttpResponseData> ProcessAsyncEvent(SPRemoteEventProperties properties, ClientContext context, HttpRequestData req)
         {
             switch (properties.EventType)
             {
@@ -129,7 +124,8 @@ namespace PnP.Framework.RER.Functions
                 //etc
                 default: { break; }
             }
-            return new OkResult();
+
+            return req.CreateResponse(HttpStatusCode.OK);
         }
 
         private string CreateEventResponse(SPRemoteEventResult eventResult)
